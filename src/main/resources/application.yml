@@ -1,0 +1,14 @@
+integration:
+  agent:
+    llm:
+      # mock | chat (use chat.provider: openai or openrouter for real LLM)
+      mode: chat
+      # When mode=chat: openai (OpenAI API) or openrouter (OpenAI-compatible, e.g. DeepSeek via OpenRouter).
+      chat:
+        provider: openrouter
+        # OPENAI_API_KEY first, else OPENROUTER_API_KEY (e.g. only router key set).
+        api-key:
+        # Optional. For provider=openrouter, defaults to https://openrouter.ai/api/v1 if blank.
+        base-url: ""
+        model-name: gpt-4o-mini
+        timeout-seconds: 60

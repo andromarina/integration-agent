@@ -1,0 +1,207 @@
+<mat-toolbar color="primary">
+  <span>Integration Agent</span>
+  @if (loading()) {
+    <span class="toolbar-loading">Running…</span>
+  }
+</mat-toolbar>
+
+<div class="dashboard">
+  <section class="panel panel--inputs">
+    <h2 class="panel-title">Run</h2>
+    <mat-form-field appearance="outline" class="full-width">
+      <mat-label>Goal</mat-label>
+      <textarea matInput rows="4" [(ngModel)]="goalText" placeholder="What should the agent accomplish?" [disabled]="loading()"></textarea>
+    </mat-form-field>
+    <mat-form-field appearance="outline" class="full-width">
+      <mat-label>OpenAPI spec (JSON or YAML)</mat-label>
+      <textarea matInput rows="10" [(ngModel)]="openApiText" placeholder="{ &quot;openapi&quot;: &quot;3.0.0&quot;, ... }" [disabled]="loading()"></textarea>
+    </mat-form-field>
+    <div class="actions">
+      <button mat-flat-button color="primary" type="button" (click)="run()" [disabled]="loading() || !inputsValid()">Run agent</button>
+      <button mat-stroked-button type="button" (click)="retry()" [disabled]="loading() || !lastRequest()">Retry last run</button>
+    </div>
+    @if (loading()) {
+      <div class="loading-row">
+        <mat-progress-spinner diameter="36" mode="indeterminate" />
+        <span>Waiting for the agent…</span>
+      </div>
+    }
+  </section>
+
+  <div class="main-columns">
+    <section class="panel panel--timeline">
+      <h2 class="panel-title">Execution timeline</h2>
+      @if (error(); as errorMessage) {
+        <mat-card class="error-card" appearance="outlined">
+          <p class="error-text">{{ errorMessage }}</p>
+        </mat-card>
+      }
+      @if (!loading() && steps().length === 0 && !error()) {
+        <p class="muted">Run the agent to see steps here.</p>
+      }
+      <div class="timeline">
+        @for (step of steps(); track step.stepNumber; let index = $index) {
+          <mat-card
+            class="step-card"
+            [class.step--success]="step.status === 'SUCCESS'"
+            [class.step--failed]="step.status === 'FAILED'"
+            [style.animation-delay.ms]="index * 90"
+            appearance="outlined"
+          >
+            <div class="step-header">
+              <span class="step-number">#{{ step.stepNumber }}</span>
+              <span class="step-action">{{ step.action }}</span>
+              <span class="step-status">{{ step.status }}</span>
+            </div>
+            @if (step.errorMessage) {
+              <p class="step-error">{{ step.errorMessage }}</p>
+            }
+            <mat-accordion>
+              <mat-expansion-panel>
+                <mat-expansion-panel-header>
+                  <mat-panel-title>Input</mat-panel-title>
+                </mat-expansion-panel-header>
+                <pre class="json-block">{{ step.input | jsonFormat }}</pre>
+              </mat-expansion-panel>
+              <mat-expansion-panel>
+                <mat-expansion-panel-header>
+                  <mat-panel-title>Output</mat-panel-title>
+                </mat-expansion-panel-header>
+                <pre class="json-block">{{ step.output | jsonFormat }}</pre>
+              </mat-expansion-panel>
+            </mat-accordion>
+          </mat-card>
+        }
+        <div #timelineEnd class="timeline-end" aria-hidden="true"></div>
+      </div>
+    </section>
+
+    <section class="panel panel--detail">
+      <h2 class="panel-title">Outcome</h2>
+      <mat-tab-group
+        class="outcome-tabs"
+        [selectedIndex]="panelTabIndex()"
+        (selectedIndexChange)="onPanelTabIndexChange($event)"
+        animationDuration="0ms"
+      >
+        <mat-tab label="Result">
+          <div class="tab-body">
+            @if (result(); as text) {
+              <pre class="result-block">{{ text }}</pre>
+            } @else if (!loading() && steps().length > 0) {
+              <p class="muted">No final result payload.</p>
+            } @else {
+              <p class="muted">—</p>
+            }
+          </div>
+        </mat-tab>
+        <mat-tab label="Code">
+          <div class="tab-body tab-body--code">
+            @if (codegenClientArtifacts().length === 0 && codegenTypeArtifacts().length === 0) {
+              <p class="muted">No generated client code in this run.</p>
+            } @else {
+              @for (artifact of codegenClientArtifacts(); track artifact.stepNumber) {
+                <mat-expansion-panel [expanded]="true" class="code-artifact-panel">
+                  <mat-expansion-panel-header>
+                    <mat-panel-title>
+                      Generated client · step {{ artifact.stepNumber }}
+                    </mat-panel-title>
+                  </mat-expansion-panel-header>
+                  <div class="code-meta">
+                    @for (line of metadataLines(artifact.data['metadata']); track line.label) {
+                      <div class="meta-line"><span class="meta-label">{{ line.label }}</span> {{ line.value }}</div>
+                    }
+                  </div>
+                  <div class="code-toolbar">
+                    <button mat-stroked-button type="button" (click)="copyText(stringifyCode(artifact.data['code']))">Copy integration</button>
+                    @if (artifact.data['language'] === 'java') {
+                      <button
+                        mat-stroked-button
+                        type="button"
+                        (click)="downloadSource('GeneratedClient.java', stringifyCode(artifact.data['code']))"
+                      >
+                        Download integration .java
+                      </button>
+                    }
+                  </div>
+                  <pre class="code-pre"><code
+                      class="hljs"
+                      [innerHTML]="highlightCode(stringifyCode(artifact.data['code']), stringLang(artifact.data['language']))"
+                    ></code></pre>
+                  @if (artifact.data['testCode']) {
+                    <h3 class="code-subheading">Test sketch</h3>
+                    <div class="code-toolbar">
+                      <button mat-stroked-button type="button" (click)="copyText(stringifyCode(artifact.data['testCode']))">Copy tests</button>
+                      <button
+                        mat-stroked-button
+                        type="button"
+                        (click)="downloadSource('GeneratedClientTest.java', stringifyCode(artifact.data['testCode']))"
+                      >
+                        Download test .java
+                      </button>
+                    </div>
+                    <pre class="code-pre"><code
+                        class="hljs"
+                        [innerHTML]="highlightCode(stringifyCode(artifact.data['testCode']), 'java')"
+                      ></code></pre>
+                  }
+                </mat-expansion-panel>
+              }
+              @for (artifact of codegenTypeArtifacts(); track artifact.stepNumber + '-' + stringifyClassName(artifact.data['className'])) {
+                <mat-expansion-panel [expanded]="true" class="code-artifact-panel">
+                  <mat-expansion-panel-header>
+                    <mat-panel-title>
+                      Java type {{ artifact.data['className'] }} · step {{ artifact.stepNumber }}
+                    </mat-panel-title>
+                  </mat-expansion-panel-header>
+                  <div class="code-toolbar">
+                    <button mat-stroked-button type="button" (click)="copyText(stringifyCode(artifact.data['code']))">Copy</button>
+                    @if (artifact.data['language'] === 'java') {
+                      <button
+                        mat-stroked-button
+                        type="button"
+                        (click)="downloadSource(stringifyClassName(artifact.data['className']) + '.java', stringifyCode(artifact.data['code']))"
+                      >
+                        Download .java
+                      </button>
+                    }
+                  </div>
+                  <pre class="code-pre"><code
+                      class="hljs"
+                      [innerHTML]="highlightCode(stringifyCode(artifact.data['code']), stringLang(artifact.data['language']))"
+                    ></code></pre>
+                </mat-expansion-panel>
+              }
+            }
+          </div>
+        </mat-tab>
+        <mat-tab label="API Calls">
+          <div class="tab-body">
+            @if (httpRows().length === 0) {
+              <p class="muted">No HTTP tool steps in this trace, or fields could not be parsed.</p>
+            } @else {
+              @for (row of httpRows(); track row.stepNumber) {
+                <mat-card class="tool-row" appearance="outlined">
+                  <div class="tool-line"><strong>Step</strong> {{ row.stepNumber }}</div>
+                  <div class="tool-line"><strong>Method</strong> {{ row.method ?? '—' }}</div>
+                  <div class="tool-line tool-endpoint"><strong>URL</strong> {{ row.endpoint ?? '—' }}</div>
+                  <div class="tool-line">
+                    <strong>Status</strong>
+                    @if (row.statusCode !== null) {
+                      {{ row.statusCode }}
+                    } @else {
+                      —
+                    }
+                    @if (row.success !== null) {
+                      <span [class]="row.success ? 'ok' : 'bad'"> ({{ row.success ? 'ok' : 'failed' }})</span>
+                    }
+                  </div>
+                </mat-card>
+              }
+            }
+          </div>
+        </mat-tab>
+      </mat-tab-group>
+    </section>
+  </div>
+</div>

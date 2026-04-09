@@ -1,5 +1,11 @@
 integration:
   agent:
+    # Browser CORS: add every origin that hosts your SPA (scheme + host + port).
+    cors:
+      allowed-origins:
+        - "http://localhost:4200"
+        - "http://127.0.0.1:4200"
+        - "https://integration-agent-frontend.onrender.com"
     llm:
       # mock | chat (use chat.provider: openai or openrouter for real LLM)
       mode: chat
@@ -7,7 +13,7 @@ integration:
       chat:
         provider: openrouter
         # OPENAI_API_KEY first, else OPENROUTER_API_KEY (e.g. only router key set).
-        api-key:
+        api-key: 123
         # Optional. For provider=openrouter, defaults to https://openrouter.ai/api/v1 if blank.
         base-url: ""
         model-name: gpt-4o-mini

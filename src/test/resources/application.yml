@@ -1,0 +1,5 @@
+# Tests: avoid requiring LLM API keys from main application.yml (mode=chat).
+integration:
+  agent:
+    llm:
+      mode: mock
